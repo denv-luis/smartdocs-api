@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>SmartDocs</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f6f8;
+            display: flex;
+            justify-content: center;
+            padding-top: 40px;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            width: 520px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.08);
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        .subtitle {
+            text-align: center;
+            font-size: 14px;
+            color: gray;
+            margin-bottom: 20px;
+        }
+
+        input[type="text"] {
+            width: 48%;
+            padding: 8px;
+            margin-right: 2%;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+
+        textarea {
+            width: 100%;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        .info {
+            font-size: 12px;
+            color: gray;
+            margin-top: 5px;
+        }
+
+        .status {
+            margin-top: 15px;
+            font-weight: bold;
+        }
+
+        .files-list {
+            font-size: 13px;
+            margin-top: 10px;
+        }
+
+        .campo {
+            margin-bottom: 10px;
+        }
+
+        .add-btn {
+            background-color: #10b981;
+        }
+
+        .add-btn:hover {
+            background-color: #0f9f6e;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <h1>SmartDocs</h1>
+
+    <p class="subtitle">
+        Automação simples de documentos Word (.docx)
+    </p>
+
+    <form id="form">
+
+    <label>
+        <strong>Modo de operação:</strong>
+    </label>
+
+    <br><br>
+
+    <select id="modo">
+        <option value="template">
+            Template {{ }}
+        </option>
+
+        <option value="livre">
+            Substituição Livre
+        </option>
+    </select>
+
+    <br><br>
+
+    <label>
+        <strong>Escolha o arquivo:</strong>
+    </label>
+
+    <br>
+
+    <input type="file" name="arquivo" required>
+
+    <p class="info">
+        Envie um arquivo Word (.docx)
+    </p>
+
+    <div class="files-list" id="filesList"></div>
+
+    <br>
+
+    <label>
+        <strong>Substituições:</strong>
+    </label>
+
+    <br>
+
+    <div id="campos"></div>
+
+    <button
+        type="button"
+        class="add-btn"
+        onclick="adicionarCampo()"
+    >
+        + Adicionar substituição
+    </button>
+
+    <button type="submit">
+        Processar Documento
+    </button>
+
+</form>
+
+    <div class="status" id="status"></div>
+
+</div>
+
+<script>
+
+const fileInput = document.querySelector('input[type="file"]');
+const filesList = document.getElementById("filesList");
+
+
+// Mostrar nome do arquivo
+fileInput.addEventListener("change", () => {
+
+    const file = fileInput.files[0];
+
+    if (file) {
+        filesList.innerHTML = "📄 " + file.name;
+    }
+
+});
+
+
+// Adicionar campos dinâmicos
+function adicionarCampo() {
+
+    const container = document.getElementById("campos");
+
+    const div = document.createElement("div");
+
+    div.classList.add("campo");
+
+    div.innerHTML = `
+        <input
+            type="text"
+            placeholder="Campo (ex: empresa)"
+            class="chave"
+        >
+
+        <input
+            type="text"
+            placeholder="Valor (ex: Empresa XPTO)"
+            class="valor"
+        >
+    `;
+
+    container.appendChild(div);
+}
+
+
+// Campos iniciais
+adicionarCampo();
+adicionarCampo();
+
+
+// Submit do formulário
+document.getElementById("form").addEventListener("submit", async function(e) {
+
+    e.preventDefault();
+
+    const status = document.getElementById("status");
+
+    const button = document.querySelector("button[type='submit']");
+
+    status.innerText = "⏳ Processando...";
+
+    button.disabled = true;
+
+    button.innerText = "Processando...";
+
+    const formData = new FormData();
+
+    // Arquivo
+    const arquivo = fileInput.files[0];
+
+    if (!arquivo) {
+
+        status.innerText = "❌ Nenhum arquivo selecionado!";
+
+        button.disabled = false;
+
+        button.innerText = "Gerar Documento";
+
+        return;
+    }
+
+    formData.append("arquivo", arquivo);
+
+    // JSON dinâmico
+    let dados = {};
+
+    document.querySelectorAll("#campos .campo").forEach(div => {
+
+        const chave = div.querySelector(".chave").value.trim();
+
+        const valor = div.querySelector(".valor").value.trim();
+
+        if (chave) {
+            dados[chave] = valor;
+        }
+
+    });
+
+    if (Object.keys(dados).length === 0) {
+
+        status.innerText = "❌ Adicione pelo menos um campo!";
+
+        button.disabled = false;
+
+        button.innerText = "Gerar Documento";
+
+        return;
+    }
+
+    const modo = document.getElementById("modo").value;
+    if (modo === "template") {
+    formData.append(
+        "dados_json",
+        JSON.stringify(dados)
+    );
+} else {
+    formData.append(
+        "substituicoes_json",
+        JSON.stringify(dados)
+    );
+}
+
+    try {
+
+        let rota = "";
+
+        if (modo === "template") {
+            rota = "http://127.0.0.1:8000/gerar-documento";
+        } else {
+            rota = "http://127.0.0.1:8000/substituir-livre";
+        }
+
+        const response = await fetch(
+            rota,
+            {
+                method: "POST",
+                body: formData
+            }
+        );
+
+        if (!response.ok) {
+            throw new Error("Erro ao gerar documento");
+        }
+
+        const blob = await response.blob();
+
+        const link = document.createElement("a");
+
+        link.href = window.URL.createObjectURL(blob);
+
+        link.download = "documento.docx";
+
+        link.click();
+
+        status.innerText = "✅ Documento gerado com sucesso!";
+
+    } catch (error) {
+
+        status.innerText = "❌ Erro: " + error.message;
+
+    }
+
+    button.disabled = false;
+
+    button.innerText = "Gerar Documento";
+
+});
+
+</script>
+
+</body>
+</html>
