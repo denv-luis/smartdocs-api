@@ -165,12 +165,13 @@ const filesList = document.getElementById("filesList");
 
 
 // Mostrar nome do arquivo
-fileInput.addEventListener("change", () => {
+fileInput.addEventListener("change", async () => {
 
     const file = fileInput.files[0];
 
     if (file) {
         filesList.innerHTML = "📄 " + file.name;
+        await carregarCamposAutomaticamente();
     }
 
 });
@@ -203,9 +204,55 @@ function adicionarCampo() {
 }
 
 
-// Campos iniciais
-adicionarCampo();
-adicionarCampo();
+async function carregarCamposAutomaticamente() {
+
+    const arquivo = fileInput.files[0];
+
+    if (!arquivo) return;
+
+    const formData = new FormData();
+
+    formData.append("arquivo", arquivo);
+
+    const response = await fetch(
+        "https://smartdocs-api-4ug5.onrender.com/extrair-campos",
+        {
+            method: "POST",
+            body: formData
+        }
+    );
+
+    const data = await response.json();
+
+    const container = document.getElementById("campos");
+
+    // limpa campos antigos
+    container.innerHTML = "";
+
+    data.campos.forEach(campo => {
+
+        const div = document.createElement("div");
+
+        div.classList.add("campo");
+
+        div.innerHTML = `
+            <input
+                type="text"
+                class="chave"
+                value="${campo}"
+                readonly
+            >
+
+            <input
+                type="text"
+                class="valor"
+                placeholder="Digite o valor"
+            >
+        `;
+
+        container.appendChild(div);
+    });
+}
 
 
 // Submit do formulário
@@ -285,9 +332,9 @@ document.getElementById("form").addEventListener("submit", async function(e) {
         let rota = "";
 
         if (modo === "template") {
-            rota = "https://smartdocs-api-4ug5.onrender.com/gerar-documento";
+            rota = "http://127.0.0.1:8000/gerar-documento";
         } else {
-            rota = "https://smartdocs-api-4ug5.onrender.com/substituir-livre";
+            rota = "http://127.0.0.1:8000/substituir-livre";
         }
 
         const response = await fetch(

@@ -4,7 +4,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import json, shutil, os, uuid
 
-from services import preencher_documento, substituir_textos_documento
+from services import (
+    preencher_documento,
+    substituir_textos_documento,
+    extrair_placeholders
+)
 
 app = FastAPI(
     title="SmartDocs API",
@@ -189,3 +193,23 @@ async def substituir_varios(
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         background=background_tasks
     )
+
+@app.post("/extrair-campos")
+async def extrair_campos(
+    arquivo: UploadFile = File(...)
+):
+    if not arquivo.filename.endswith(".docx"):
+        raise HTTPException(
+            status_code=400,
+            detail="Envie apenas arquivos .docx"
+        )
+    caminho_temp = f"temp_{arquivo.filename}"
+    with open(caminho_temp, "wb") as f:
+        f.write(await arquivo.read())
+    placeholders = extrair_placeholders(
+        caminho_temp
+    )
+    os.remove(caminho_temp)
+    return {
+        "campos": placeholders
+    }
