@@ -73,7 +73,35 @@
         }
 
         .campo {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .campo label {
+            display: block;
+            font-size: 13px;
+            font-weight: bold;
+            color: #374151;
+            margin-bottom: 5px;
+        }
+
+        .campo input {
+            width: 100%;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #d1d5db;
             margin-bottom: 10px;
+            box-sizing: border-box;
+
+        }
+
+        .campo input[readonly] {
+            background-color: #eef2ff;
+            color: #4338ca;
+            font-weight: bold;
         }
 
         .add-btn {
@@ -82,6 +110,90 @@
 
         .add-btn:hover {
             background-color: #0f9f6e;
+        }
+        .drop-area {
+            border: 2px dashed #2563eb;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            background-color: #f9fbff;
+            transition: 0.3s
+        }
+        .drop-area:hover {
+            background-color: #eef4ff;
+        }
+        .drop-area.dragover {
+            background-color: #dbeafe;
+        } 
+
+        .loader {
+    border: 4px solid #e5e7eb;
+    border-top: 4px solid #2563eb;
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    animation: spin 1s linear infinite;
+    margin: 15px auto;
+    display: none;
+}
+
+@keyframes spin {
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+        .input-error {
+            border: 2px solid #ef4444 !important;
+            background-color: #fef2f2;
+        }
+
+        .preview-box {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .preview-box h3 {
+            margin-top: 0;
+            font-size: 16px;
+        }
+
+        .preview-item {
+            padding: 6px 0;
+            color: #374151;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.4s ease;
+        }
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+        .template-item {
+            padding: 10px;
+            margin-bottom: 8px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            cursor: pointer;
+            background: white;
+            transition: 0.2s;
+        }
+
+        .template-item:hover {
+            background: #f3f4f6;
         }
     </style>
 </head>
@@ -122,13 +234,28 @@
 
     <br>
 
-    <input type="file" name="arquivo" required>
+    <div id="dropArea" class="drop-area">
+        <p>
+            📄 Arraste seu documento aqui
+        </p>
+        <p>
+            ou clique para selecionar
+        </p>
+        <input
+            type="file"
+            name="arquivo"
+            id="arquivoInput"
+            hidden
+            required
+        >
+    </div>
 
     <p class="info">
         Envie um arquivo Word (.docx)
     </p>
 
     <div class="files-list" id="filesList"></div>
+    <div id="contadorCampos" class="info"></div>
 
     <br>
 
@@ -137,6 +264,16 @@
     </label>
 
     <br>
+
+    <div class="preview-box" id="previewBox">
+
+        <h3>
+            📄 Campos encontrados
+        </h3>
+
+        <div id="previewCampos"></div>
+
+    </div>
 
     <div id="campos"></div>
 
@@ -152,16 +289,70 @@
         Processar Documento
     </button>
 
+    <button
+    type="button"
+    onclick="limparFormulario()"
+>
+    Limpar
+</button>
+
 </form>
 
+    <h3>
+    📚 Templates Salvos
+    </h3>
+
+    <div id="listaTemplates"></div>
+
+    <br>
+
     <div class="status" id="status"></div>
+
+    <div class="loader" id="loader"></div>
 
 </div>
 
 <script>
 
-const fileInput = document.querySelector('input[type="file"]');
+const API_URL =
+    "http://127.0.0.1:8000";
+const fileInput = document.getElementById("arquivoInput");
+const dropArea = document.getElementById("dropArea");
 const filesList = document.getElementById("filesList");
+
+dropArea.addEventListener("click", () => {
+    fileInput.click()
+});
+
+dropArea.addEventListener("dragover", (e) => {
+
+    e.preventDefault();
+
+    dropArea.classList.add("dragover");
+});
+
+dropArea.addEventListener("dragleave", () => {
+
+    dropArea.classList.remove("dragover");
+});
+
+dropArea.addEventListener("drop", async (e) => {
+
+    e.preventDefault();
+
+    dropArea.classList.remove("dragover");
+
+    fileInput.files = e.dataTransfer.files;
+
+    const file = fileInput.files[0];
+
+    if (file) {
+
+        filesList.innerHTML = "📄 " + file.name;
+
+        await carregarCamposAutomaticamente();
+    }
+});
 
 
 // Mostrar nome do arquivo
@@ -182,9 +373,13 @@ function adicionarCampo() {
 
     const container = document.getElementById("campos");
 
+    const previewBox = document.getElementById("previewBox");
+
+    const previewCampos = document.getElementById("previewCampos");
+
     const div = document.createElement("div");
 
-    div.classList.add("campo");
+    div.classList.add("campo", "fade-in");
 
     div.innerHTML = `
         <input
@@ -215,7 +410,7 @@ async function carregarCamposAutomaticamente() {
     formData.append("arquivo", arquivo);
 
     const response = await fetch(
-        "https://smartdocs-api-4ug5.onrender.com/extrair-campos",
+        `${API_URL}/extrair-campos`,
         {
             method: "POST",
             body: formData
@@ -223,38 +418,97 @@ async function carregarCamposAutomaticamente() {
     );
 
     const data = await response.json();
+    console.log(data);
 
     const container = document.getElementById("campos");
+
+    const previewBox = 
+        document.getElementById("previewBox");
+
+    const previewCampos = 
+        document.getElementById("previewCampos");
 
     // limpa campos antigos
     container.innerHTML = "";
 
+    previewCampos.innerHTML = "";
+
+    document.getElementById("contadorCampos").innerText =
+        data.campos.length + " campos detectados automaticamente"
+
     data.campos.forEach(campo => {
 
+        // PREVIEW
+        const item = document.createElement("div");
+
+        item.classList.add("preview-item", "fade-in");
+
+        item.innerHTML = `✓ ${campo}`;
+
+        previewCampos.appendChild(item);
+
+        //INPUTS
         const div = document.createElement("div");
 
         div.classList.add("campo");
 
         div.innerHTML = `
-            <input
-                type="text"
-                class="chave"
-                value="${campo}"
-                readonly
-            >
+    <label>
+        Campo detectado
+    </label>
 
-            <input
-                type="text"
-                class="valor"
-                placeholder="Digite o valor"
-            >
-        `;
+    <input
+        type="text"
+        class="chave"
+        value="${campo}"
+        readonly
+    >
+
+    <label>
+        Valor
+    </label>
+
+    <input
+        type="text"
+        class="valor"
+        placeholder="Digite o valor"
+    >
+`;
 
         container.appendChild(div);
     });
+
+    previewBox.style.display = "block"
 }
 
+async function carregarTemplates() {
 
+    const response = await fetch(
+        `${API_URL}/templates`
+    );
+
+    const data = await response.json();
+
+    const lista =
+        document.getElementById("listaTemplates");
+
+    lista.innerHTML = "";
+
+    data.templates.forEach(template => {
+
+        const div = document.createElement("div");
+
+        div.classList.add("template-item");
+
+        div.innerHTML =
+            "📄 " +
+            template.replace(".docx", "");
+
+        lista.appendChild(div);
+
+    });
+
+}
 // Submit do formulário
 document.getElementById("form").addEventListener("submit", async function(e) {
 
@@ -265,6 +519,8 @@ document.getElementById("form").addEventListener("submit", async function(e) {
     const button = document.querySelector("button[type='submit']");
 
     status.innerText = "⏳ Processando...";
+
+    document.getElementById("loader").style.display = "block";
 
     button.disabled = true;
 
@@ -282,6 +538,8 @@ document.getElementById("form").addEventListener("submit", async function(e) {
         button.disabled = false;
 
         button.innerText = "Gerar Documento";
+
+        document.getElementById("loader").style.display = "none";
 
         return;
     }
@@ -303,16 +561,36 @@ document.getElementById("form").addEventListener("submit", async function(e) {
 
     });
 
-    if (Object.keys(dados).length === 0) {
+    let camposVazios = false;
 
-        status.innerText = "❌ Adicione pelo menos um campo!";
+document.querySelectorAll("#campos .campo").forEach(div => {
 
-        button.disabled = false;
+    const inputValor = div.querySelector(".valor");
 
-        button.innerText = "Gerar Documento";
+    const valor = inputValor.value.trim();
 
-        return;
+    inputValor.classList.remove("input-error");
+
+    if (!valor) {
+        camposVazios = true;
+
+        inputValor.classList.add("input-error");
     }
+});
+
+if (camposVazios) {
+
+    status.innerText =
+        "❌ Preencha todos os campos antes de continuar!";
+
+    button.disabled = false;
+
+    button.innerText = "Processar Documento";
+
+    document.getElementById("loader").style.display = "none";
+
+    return;
+}
 
     const modo = document.getElementById("modo").value;
     if (modo === "template") {
@@ -332,9 +610,11 @@ document.getElementById("form").addEventListener("submit", async function(e) {
         let rota = "";
 
         if (modo === "template") {
-            rota = "http://127.0.0.1:8000/gerar-documento";
+            rota =
+            `${API_URL}/gerar-documento`;
         } else {
-            rota = "http://127.0.0.1:8000/substituir-livre";
+            rota = 
+            `${API_URL}/substituir-livre`;
         }
 
         const response = await fetch(
@@ -363,16 +643,47 @@ document.getElementById("form").addEventListener("submit", async function(e) {
 
     } catch (error) {
 
-        status.innerText = "❌ Erro: " + error.message;
+    status.innerText = "❌ Erro: " + error.message;
 
-    }
+} finally {
 
     button.disabled = false;
 
-    button.innerText = "Gerar Documento";
+    button.innerText = "Processar Documento";
+
+    document.getElementById("loader").style.display = "none";
+}
 
 });
 
+function limparFormulario() {
+
+    // limpa arquivo
+    fileInput.value = "";
+
+    // limpa nome do arquivo
+    filesList.innerHTML = "";
+
+    // limpa campos
+    document.getElementById("campos").innerHTML = "";
+
+    // limpa contador
+    document.getElementById("contadorCampos").innerText = "";
+
+    // limpa status
+    document.getElementById("status").innerText = "";
+
+    // limpa preview
+    document.getElementById(
+        "previewCampos"
+    ).innerHTML = "";
+
+    // esconde preview
+    document.getElementById(
+        "previewBox"
+    ).style.display = "none";
+}
+carregarTemplates();
 </script>
 
 </body>

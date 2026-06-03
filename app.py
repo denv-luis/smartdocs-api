@@ -213,3 +213,84 @@ async def extrair_campos(
     return {
         "campos": placeholders
     }
+
+# -------------------------
+# 4. MODELOS SALVOS
+# -------------------------
+@app.post("/salvar-template")
+async def salvar_template(
+    arquivo: UploadFile = File(...)
+):
+    os.makedirs("templates", exist_ok=True)
+
+    caminho = os.path.join(
+        "templates",
+        arquivo.filename
+    )
+    with open(caminho, "wb") as buffer:
+        shutil.copyfileobj(
+            arquivo.file,
+            buffer
+        )
+    return {
+        "mensagem": "Template salvo com sucesso",
+        "arquivo": arquivo.filename
+    }
+
+@app.get("/templates")
+async def listar_templates():
+
+    os.makedirs("templates", exist_ok=True)
+    arquivos = [
+        arquivo
+        for arquivo in os.listdir("templates")
+        if arquivo.endswith(".docx")
+    ]
+    return {
+        "templates": arquivos
+    }
+
+# -------------------------
+# 5. GERAR TEMPLATES
+# -------------------------
+@app.post("/gerar-template")
+def gerar_template_salvo(
+    background_tasks: BackgroundTasks,
+    template: str = Form(...),
+    dados_json: str = Form(...)
+):
+    caminho_modelo = os.path.join(
+        "templates",
+        template
+    )
+    if not os.path.exists(caminho_modelo):
+        raise HTTPException(
+            status_code=404,
+            detail="Template não encontrado"
+        )
+    try:
+        dados = json.loads(dados_json)
+    except:
+        raise HTTPException(
+            status_code=400,
+            detail="JSON inválido"
+        )
+    doc = preencher_documento(
+        caminho_modelo,
+        dados
+    )
+    nome_saida = f"documento_{uuid.uuid4()}.docx"
+
+    doc.save(nome_saida)
+
+    background_tasks.add_task(
+        os.remove,
+        nome_saida
+    )
+
+    return FileResponse(
+        path=nome_saida,
+        filename=nome_saida,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        background=background_tasks
+    )
