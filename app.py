@@ -33,10 +33,7 @@ app.add_middleware(
 # -------------------------
 @app.get("/")
 def home():
-    return {
-        "success": True,
-        "message": "SmartDocs API online"
-    }
+    return FileResponse("index.html")
 
 
 # -------------------------
