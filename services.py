@@ -18,42 +18,100 @@ def copiar_estilo(origem, destino):
     except:
         pass
 
+
 def substituir_runs(paragraph, substituicoes):
+    runs = paragraph.runs
 
-    for run in paragraph.runs:
+    if not runs:
+        return
 
-        for buscar, substituir in substituicoes.items():
+    texto_completo = "".join(run.text for run in runs)
 
-            if buscar in run.text:
+    for buscar, substituir in substituicoes.items():
+        if not buscar or buscar not in texto_completo:
+            continue
 
-                run.text = run.text.replace(
-                    buscar,
-                    str(substituir)
+        texto_completo = "".join(run.text for run in runs)
+
+        while buscar.casefold() in texto_completo.casefold():
+            inicio = texto_completo.casefold().find(buscar.casefold())
+            fim = inicio + len(buscar)
+
+            posicao = 0
+            run_inicio = None
+            run_fim = None
+            offset_inicio = 0
+            offset_fim = 0
+
+            for i, run in enumerate(runs):
+                proxima_posicao = posicao + len(run.text)
+
+                if run_inicio is None and posicao <= inicio < proxima_posicao:
+                    run_inicio = i
+                    offset_inicio = inicio - posicao
+
+                if posicao < fim <= proxima_posicao:
+                    run_fim = i
+                    offset_fim = fim - posicao
+                    break
+
+                posicao = proxima_posicao
+
+            if run_inicio is None or run_fim is None:
+                break
+
+            if run_inicio == run_fim:
+                run = runs[run_inicio]
+                run.text = (
+                    run.text[:offset_inicio]
+                    + str(substituir)
+                    + run.text[offset_fim:]
                 )
+            else:
+                primeiro = runs[run_inicio]
+                ultimo = runs[run_fim]
+
+                primeiro.text = (
+                    primeiro.text[:offset_inicio]
+                    + str(substituir)
+                    + ultimo.text[offset_fim:]
+                )
+
+                for i in range(run_inicio + 1, run_fim + 1):
+                    runs[i].text = ""
+
+            texto_completo = "".join(run.text for run in runs)
+
 
 def aplicar_substituicoes(doc, substituicoes):
 
-    # Parágrafos
+    def processar_tabelas(tabelas):
+        for tabela in tabelas:
+            for linha in tabela.rows:
+                for celula in linha.cells:
+                    for p in celula.paragraphs:
+                        substituir_runs(p, substituicoes)
+
+                    # Tabelas dentro de outras tabelas
+                    processar_tabelas(celula.tables)
+
+    # Parágrafos do documento
     for p in doc.paragraphs:
         substituir_runs(p, substituicoes)
 
-    # Tabelas
-    for tabela in doc.tables:
-        for linha in tabela.rows:
-            for celula in linha.cells:
-                for p in celula.paragraphs:
-                    substituir_runs(p, substituicoes)
+    # Tabelas do documento
+    processar_tabelas(doc.tables)
 
-    # Header / Footer
+    # Cabeçalhos e rodapés de cada seção
     for secao in doc.sections:
+        for area in (secao.header, secao.footer):
+            for p in area.paragraphs:
+                substituir_runs(p, substituicoes)
 
-        for p in secao.header.paragraphs:
-            substituir_runs(p, substituicoes)
-
-        for p in secao.footer.paragraphs:
-            substituir_runs(p, substituicoes)
+            processar_tabelas(area.tables)
 
     return doc
+
 
 
 def substituir_textos_documento(
